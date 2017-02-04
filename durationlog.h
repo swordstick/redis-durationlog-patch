@@ -1,5 +1,5 @@
 /*
- * @davidwan create this file
+ * @swordstick update this file at 20170201
  * 命令执行期间的耗时日志记录.h文件
  *
  *
@@ -31,12 +31,11 @@
  */
 
 
-/* 定义宏，下面是一个使用举例
+/* 使用举例
 robj *lookupKeyWrite(redisDb *db, robj *key) {
     INITDURATIONARG;
     STARTDURATION("expireIfNeeded");
-    
-    // 删除过期键
+
     expireIfNeeded(db,key);
     LOGDURATION;
 
@@ -46,7 +45,6 @@ robj *lookupKeyWrite(redisDb *db, robj *key) {
     命令行;
     LOGDURATION;
 
-    // 查找并返回 key 的值对象
     return lookupKey(db,key);
 }
 
@@ -75,24 +73,18 @@ if ( (server.duration_status == 1) && (listAddNodeHead(server.duration,durationC
 
 /* This structure defines an entry inside the duration log list */
 /*
- * 单个命令完整耗时日志，只在slow确定输出的时候，slow输出的前提下，才Create一份该slow命令的日志
+ * 单个命令完整耗时日志，只在slow确定输出前提下，才Create一份该slow命令的日志
  */
 typedef struct durationlogEntry {
 
-    // 命令与命令参数，复用slowlog内容
     robj **argv;
 
-    // 命令与命令参数的数量，复用slowlog内容
     int argc;
 
-    // 唯一标识符，复用slowlog内容
     long long id;       /* Unique entry identifier. */
 
-    // 执行命令消耗的时间，以微秒为单位，复用slowlog内容
-    // 注释里说的 nanoseconds 是错误的
-    long long duration_all; /* Time spent by the query, in nanoseconds. */
+    long long duration_all;
 
-    // 命令执行时的时间，格式为 UNIX 时间戳
     time_t time;        /* Unix time at which the query was executed. */
 
     // 记录每个调用耗时
@@ -111,8 +103,7 @@ typedef struct durationEntry {
     char *modulename;
 
     // 执行命令消耗的时间，以微秒为单位
-    // 注释里说的 nanoseconds 是错误的
-    long long duration; /* Time spent by the query, in nanoseconds. */
+    long long duration;
 
 } durationEntry;
 
