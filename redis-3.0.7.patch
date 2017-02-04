@@ -1,0 +1,268 @@
+diff -ur redis-3.0.7/src/config.c redis-3.0.7-firstup/src/config.c
+--- redis-3.0.7/src/config.c	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/config.c	2017-02-03 04:18:00.475675377 +0800
+@@ -226,6 +226,8 @@
+             }
+         } else if (!strcasecmp(argv[0],"maxmemory") && argc == 2) {
+             server.maxmemory = memtoll(argv[1],NULL);
++        } else if (!strcasecmp(argv[0],"duration_status") && argc == 2) {
++            server.duration_status = memtoll(argv[1],NULL);
+         } else if (!strcasecmp(argv[0],"maxmemory-policy") && argc == 2) {
+             if (!strcasecmp(argv[1],"volatile-lru")) {
+                 server.maxmemory_policy = REDIS_MAXMEMORY_VOLATILE_LRU;
+@@ -638,6 +640,10 @@
+             }
+             freeMemoryIfNeeded();
+         }
++    }  else if (!strcasecmp(c->argv[2]->ptr,"duration_status")) {
++        ll = memtoll(o->ptr,&err);
++        if (err || ll < 0) goto badfmt;
++       server.duration_status = ll; 
+     } else if (!strcasecmp(c->argv[2]->ptr,"maxclients")) {
+         int orig_value = server.maxclients;
+ 
+@@ -1028,6 +1034,7 @@
+ 
+     /* Numerical values */
+     config_get_numerical_field("maxmemory",server.maxmemory);
++    config_get_numerical_field("duration_status",server.duration_status);
+     config_get_numerical_field("maxmemory-samples",server.maxmemory_samples);
+     config_get_numerical_field("timeout",server.maxidletime);
+     config_get_numerical_field("tcp-keepalive",server.tcpkeepalive);
+diff -ur redis-3.0.7/src/db.c redis-3.0.7-firstup/src/db.c
+--- redis-3.0.7/src/db.c	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/db.c	2017-02-03 04:18:01.049678109 +0800
+@@ -29,6 +29,7 @@
+ 
+ #include "redis.h"
+ #include "cluster.h"
++#include "durationlog.h"
+ 
+ #include <signal.h>
+ #include <ctype.h>
+@@ -59,9 +60,18 @@
+ 
+ robj *lookupKeyRead(redisDb *db, robj *key) {
+     robj *val;
++    INITDURATIONARG;
++    STARTDURATION("expireIfNeeded");
++
+ 
+     expireIfNeeded(db,key);
++
++    LOGDURATION;
++
++    STARTDURATION("lookupKey");
+     val = lookupKey(db,key);
++    LOGDURATION;
++
+     if (val == NULL)
+         server.stat_keyspace_misses++;
+     else
+@@ -70,13 +80,25 @@
+ }
+ 
+ robj *lookupKeyWrite(redisDb *db, robj *key) {
++    INITDURATIONARG;
++    STARTDURATION("expireIfNeeded");
++
+     expireIfNeeded(db,key);
++    LOGDURATION;
++
+     return lookupKey(db,key);
+ }
+ 
+ robj *lookupKeyReadOrReply(redisClient *c, robj *key, robj *reply) {
++
++    INITDURATIONARG;
++    STARTDURATION("lookupKeyReadOrReply");
++
+     robj *o = lookupKeyRead(c->db, key);
+     if (!o) addReply(c,reply);
++
++    LOGDURATION;
++    
+     return o;
+ }
+ 
+Only in redis-3.0.7-firstup/src: durationlog.c
+Only in redis-3.0.7-firstup/src: durationlog.h
+Only in redis-3.0.7/src/: .gitignore
+diff -ur redis-3.0.7/src/Makefile redis-3.0.7-firstup/src/Makefile
+--- redis-3.0.7/src/Makefile	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/Makefile	2017-02-03 04:18:03.216688451 +0800
+@@ -113,7 +113,7 @@
+ 
+ REDIS_SERVER_NAME=redis-server
+ REDIS_SENTINEL_NAME=redis-sentinel
+-REDIS_SERVER_OBJ=adlist.o ae.o anet.o dict.o redis.o sds.o zmalloc.o lzf_c.o lzf_d.o pqsort.o zipmap.o sha1.o ziplist.o release.o networking.o util.o object.o db.o replication.o rdb.o t_string.o t_list.o t_set.o t_zset.o t_hash.o config.o aof.o pubsub.o multi.o debug.o sort.o intset.o syncio.o cluster.o crc16.o endianconv.o slowlog.o scripting.o bio.o rio.o rand.o memtest.o crc64.o bitops.o sentinel.o notify.o setproctitle.o blocked.o hyperloglog.o latency.o sparkline.o
++REDIS_SERVER_OBJ=adlist.o ae.o anet.o dict.o redis.o sds.o zmalloc.o lzf_c.o lzf_d.o pqsort.o zipmap.o sha1.o ziplist.o release.o networking.o util.o object.o db.o replication.o rdb.o t_string.o t_list.o t_set.o t_zset.o t_hash.o config.o aof.o pubsub.o multi.o debug.o sort.o intset.o syncio.o cluster.o crc16.o endianconv.o slowlog.o scripting.o bio.o rio.o rand.o memtest.o crc64.o bitops.o sentinel.o notify.o setproctitle.o blocked.o hyperloglog.o latency.o sparkline.o durationlog.o
+ REDIS_CLI_NAME=redis-cli
+ REDIS_CLI_OBJ=anet.o sds.o adlist.o redis-cli.o zmalloc.o release.o anet.o ae.o crc64.o
+ REDIS_BENCHMARK_NAME=redis-benchmark
+diff -ur redis-3.0.7/src/redis.c redis-3.0.7-firstup/src/redis.c
+--- redis-3.0.7/src/redis.c	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/redis.c	2017-02-03 04:18:05.513699418 +0800
+@@ -32,6 +32,7 @@
+ #include "slowlog.h"
+ #include "bio.h"
+ #include "latency.h"
++#include "durationlog.h"
+ 
+ #include <time.h>
+ #include <signal.h>
+@@ -271,6 +272,7 @@
+     {"eval",evalCommand,-3,"s",0,evalGetKeys,0,0,0,0,0},
+     {"evalsha",evalShaCommand,-3,"s",0,evalGetKeys,0,0,0,0,0},
+     {"slowlog",slowlogCommand,-2,"r",0,NULL,0,0,0,0,0},
++    {"durationlog",durationlogCommand,-2,"r",0,NULL,0,0,0,0,0},
+     {"script",scriptCommand,-2,"rs",0,NULL,0,0,0,0,0},
+     {"time",timeCommand,1,"rRF",0,NULL,0,0,0,0,0},
+     {"bitop",bitopCommand,-4,"wm",0,NULL,2,-1,1,0,0},
+@@ -1562,6 +1564,7 @@
+     server.assert_line = 0;
+     server.bug_report_start = 0;
+     server.watchdog_period = 0;
++    server.duration_status = 0;
+ }
+ 
+ /* This function will try to raise the max number of open files accordingly to
+@@ -1892,6 +1895,9 @@
+     replicationScriptCacheInit();
+     scriptingInit();
+     slowlogInit();
++    durationlogInit();
++    durationInit();
++
+     latencyMonitorInit();
+     bioInit();
+ }
+@@ -2092,6 +2098,7 @@
+                               "fast-command" : "command";
+         latencyAddSampleIfNeeded(latency_event,duration/1000);
+         slowlogPushEntryIfNeeded(c->argv,c->argc,duration);
++        durationlogPushEntryIfNeeded(c->argv,c->argc,duration);
+     }
+     if (flags & REDIS_CALL_STATS) {
+         c->cmd->microseconds += duration;
+diff -ur redis-3.0.7/src/redis.h redis-3.0.7-firstup/src/redis.h
+--- redis-3.0.7/src/redis.h	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/redis.h	2017-02-03 04:18:05.633699989 +0800
+@@ -923,6 +923,11 @@
+     int assert_line;
+     int bug_report_start; /* True if bug report header was already logged. */
+     int watchdog_period;  /* Software watchdog period in ms. 0 = off */
++
++    list *durationlog;
++    list *duration;
++    long long duration_status;
++    
+ };
+ 
+ typedef struct pubsubPattern {
+diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
+--- redis-3.0.7/src/t_string.c	2016-01-25 22:57:52.000000000 +0800
++++ redis-3.0.7-firstup/src/t_string.c	2017-02-03 04:18:08.271712585 +0800
+@@ -28,6 +28,7 @@
+  */
+ 
+ #include "redis.h"
++#include "durationlog.h"
+ #include <math.h> /* isnan(), isinf() */
+ 
+ /*-----------------------------------------------------------------------------
+@@ -65,6 +66,9 @@
+ void setGenericCommand(redisClient *c, int flags, robj *key, robj *val, robj *expire, int unit, robj *ok_reply, robj *abort_reply) {
+     long long milliseconds = 0; /* initialized to avoid any harmness warning */
+ 
++    INITDURATIONARG;
++    STARTDURATION("expire get");
++
+     if (expire) {
+         if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != REDIS_OK)
+             return;
+@@ -75,19 +79,35 @@
+         if (unit == UNIT_SECONDS) milliseconds *= 1000;
+     }
+ 
++    LOGDURATION;
++    STARTDURATION("check nx xx");
++
+     if ((flags & REDIS_SET_NX && lookupKeyWrite(c->db,key) != NULL) ||
+         (flags & REDIS_SET_XX && lookupKeyWrite(c->db,key) == NULL))
+     {
+         addReply(c, abort_reply ? abort_reply : shared.nullbulk);
+         return;
+     }
++
++    LOGDURATION;
++    STARTDURATION("setkeys");
+     setKey(c->db,key,val);
+     server.dirty++;
+     if (expire) setExpire(c->db,key,mstime()+milliseconds);
++
++    LOGDURATION;
++
++    STARTDURATION("notifysend");
++
+     notifyKeyspaceEvent(REDIS_NOTIFY_STRING,"set",key,c->db->id);
+     if (expire) notifyKeyspaceEvent(REDIS_NOTIFY_GENERIC,
+         "expire",key,c->db->id);
++
++    LOGDURATION;
++
++    STARTDURATION("addReply_ok");
+     addReply(c, ok_reply ? ok_reply : shared.ok);
++    LOGDURATION;
+ }
+ 
+ /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>] */
+@@ -144,15 +164,20 @@
+ 
+ int getGenericCommand(redisClient *c) {
+     robj *o;
++    INITDURATIONARG;
+ 
+     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk)) == NULL)
+         return REDIS_OK;
+ 
++    STARTDURATION("checktype_addReplay");
++
+     if (o->type != REDIS_STRING) {
+         addReply(c,shared.wrongtypeerr);
++        LOGDURATION;
+         return REDIS_ERR;
+     } else {
+         addReplyBulk(c,o);
++        LOGDURATION;
+         return REDIS_OK;
+     }
+ }
+@@ -286,7 +311,8 @@
+ 
+ void msetGenericCommand(redisClient *c, int nx) {
+     int j, busykeys = 0;
+-
++    INITDURATIONARG;
++    STARTDURATION("checkkeysexists");
+     if ((c->argc % 2) == 0) {
+         addReplyError(c,"wrong number of arguments for MSET");
+         return;
+@@ -305,11 +331,17 @@
+         }
+     }
+ 
++    LOGDURATION;
++
++    STARTDURATION("setkeys");
++
+     for (j = 1; j < c->argc; j += 2) {
+         c->argv[j+1] = tryObjectEncoding(c->argv[j+1]);
+         setKey(c->db,c->argv[j],c->argv[j+1]);
+         notifyKeyspaceEvent(REDIS_NOTIFY_STRING,"set",c->argv[j],c->db->id);
+     }
++
++    LOGDURATION;
+     server.dirty += (c->argc-1)/2;
+     addReply(c, nx ? shared.cone : shared.ok);
+ }
