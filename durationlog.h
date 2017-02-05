@@ -53,14 +53,14 @@ robj *lookupKeyWrite(redisDb *db, robj *key) {
 
 #define INITDURATIONARG \
 char *modulename;\
-long long  start, duration;\
+long long  start_dur, duration;\
 
 #define STARTDURATION(_modulename) \
 modulename = _modulename; \
-start=ustime();
+start_dur=ustime();
 
 #define LOGDURATION \
-duration = ustime()-start;\
+duration = ustime()-start_dur;\
 if ( (server.duration_status == 1) && (listAddNodeHead(server.duration,durationCreateEntry(modulename,duration)) == NULL) )\
    redisLog(REDIS_WARNING,"Fatal: Can't CreateEntry to server.druation.");
 
