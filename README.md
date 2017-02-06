@@ -33,7 +33,7 @@ $ make && make install
 durationlog_status  = 1				//	1为打开，0为关闭，默认为1
 slowlog-log-slower-than 1			//	时间阀值,复用slowlog参数，无需额外调整
 slowlog-max-len 128					//	最大长度,复用slowlog参数，无需额外调整
-
+loglevel = notice[debug,verbose]	//  durationlog输出最低loglevel要求为notice，更深埋点需要debug,verbose生效,notice为默认loglevel值
 ```
 
 ### 在线开关DURATIONLOG功能
@@ -42,6 +42,8 @@ slowlog-max-len 128					//	最大长度,复用slowlog参数，无需额外调整
 config set durationlog_status "1"	
 config set durationlog_status "0"	
 config get durationlog_status
+//loglevel被调整到warning时，durationlog同样也关闭，在debug和verbose下loglevel可以丰富返回信息，目前在增加debug和verbose级别的埋点，暂时各级别信息量一致
+config set loglevel "notice"
 ```
 
 

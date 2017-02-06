@@ -59,9 +59,9 @@ long long  start_dur, duration;\
 modulename = _modulename; \
 start_dur=ustime();
 
-#define LOGDURATION \
-duration = ustime()-start_dur;\
-if ( (server.duration_status == 1) && (listAddNodeHead(server.duration,durationCreateEntry(modulename,duration)) == NULL) )\
+#define LOGDURATION(level) \
+duration = ustime()-start_dur; \
+if ( (level >= server.verbosity) && (server.duration_status == 1) && (listAddNodeHead(server.duration,durationCreateEntry(modulename,duration)) == NULL) ) \
    redisLog(REDIS_WARNING,"Fatal: Can't CreateEntry to server.druation.");
 
 #define SLOWLOG_ENTRY_MAX_ARGC 32
