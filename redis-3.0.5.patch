@@ -1,6 +1,6 @@
-diff -ur redis-3.0.7/src/config.c redis-3.0.7-firstup/src/config.c
---- redis-3.0.7/src/config.c	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/config.c	2017-02-08 16:35:00.713651638 +0800
+diff -ur redis-3.0.5/src/config.c redis-3.0.5-firstup/src/config.c
+--- redis-3.0.5/src/config.c	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/config.c	2017-02-08 16:35:03.923667155 +0800
 @@ -226,6 +226,8 @@
              }
          } else if (!strcasecmp(argv[0],"maxmemory") && argc == 2) {
@@ -29,9 +29,9 @@ diff -ur redis-3.0.7/src/config.c redis-3.0.7-firstup/src/config.c
      config_get_numerical_field("maxmemory-samples",server.maxmemory_samples);
      config_get_numerical_field("timeout",server.maxidletime);
      config_get_numerical_field("tcp-keepalive",server.tcpkeepalive);
-diff -ur redis-3.0.7/src/db.c redis-3.0.7-firstup/src/db.c
---- redis-3.0.7/src/db.c	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/db.c	2017-02-08 16:35:01.101653527 +0800
+diff -ur redis-3.0.5/src/db.c redis-3.0.5-firstup/src/db.c
+--- redis-3.0.5/src/db.c	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/db.c	2017-02-08 16:35:04.284668872 +0800
 @@ -29,6 +29,7 @@
  
  #include "redis.h"
@@ -40,18 +40,15 @@ diff -ur redis-3.0.7/src/db.c redis-3.0.7-firstup/src/db.c
  
  #include <signal.h>
  #include <ctype.h>
-@@ -59,9 +60,18 @@
+@@ -59,9 +60,14 @@
  
  robj *lookupKeyRead(redisDb *db, robj *key) {
      robj *val;
+-
 +    INITDURATIONARG;
 +    STARTDURATION("expireIfNeeded");
-+
- 
      expireIfNeeded(db,key);
-+
 +    LOGDURATION(REDIS_NOTICE);
-+
 +    STARTDURATION("lookupKey");
      val = lookupKey(db,key);
 +    LOGDURATION(REDIS_NOTICE);
@@ -59,13 +56,12 @@ diff -ur redis-3.0.7/src/db.c redis-3.0.7-firstup/src/db.c
      if (val == NULL)
          server.stat_keyspace_misses++;
      else
-@@ -70,13 +80,25 @@
+@@ -70,13 +76,20 @@
  }
  
  robj *lookupKeyWrite(redisDb *db, robj *key) {
 +    INITDURATIONARG;
 +    STARTDURATION("expireIfNeeded");
-+
      expireIfNeeded(db,key);
 +    LOGDURATION(REDIS_NOTICE);
 +
@@ -73,24 +69,20 @@ diff -ur redis-3.0.7/src/db.c redis-3.0.7-firstup/src/db.c
  }
  
  robj *lookupKeyReadOrReply(redisClient *c, robj *key, robj *reply) {
-+
 +    INITDURATIONARG;
 +    STARTDURATION("lookupKeyReadOrReply");
-+
      robj *o = lookupKeyRead(c->db, key);
      if (!o) addReply(c,reply);
-+
 +    LOGDURATION(REDIS_NOTICE);
-+    
      return o;
  }
  
-Only in redis-3.0.7-firstup/src: durationlog.c
-Only in redis-3.0.7-firstup/src: durationlog.h
-Only in redis-3.0.7/src/: .gitignore
-diff -ur redis-3.0.7/src/Makefile redis-3.0.7-firstup/src/Makefile
---- redis-3.0.7/src/Makefile	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/Makefile	2017-02-08 16:35:02.382659697 +0800
+Only in redis-3.0.5-firstup/src: durationlog.c
+Only in redis-3.0.5-firstup/src: durationlog.h
+Only in redis-3.0.5/src/: .gitignore
+diff -ur redis-3.0.5/src/Makefile redis-3.0.5-firstup/src/Makefile
+--- redis-3.0.5/src/Makefile	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/Makefile	2017-02-08 16:35:05.586675145 +0800
 @@ -113,7 +113,7 @@
  
  REDIS_SERVER_NAME=redis-server
@@ -100,9 +92,9 @@ diff -ur redis-3.0.7/src/Makefile redis-3.0.7-firstup/src/Makefile
  REDIS_CLI_NAME=redis-cli
  REDIS_CLI_OBJ=anet.o sds.o adlist.o redis-cli.o zmalloc.o release.o anet.o ae.o crc64.o
  REDIS_BENCHMARK_NAME=redis-benchmark
-diff -ur redis-3.0.7/src/redis.c redis-3.0.7-firstup/src/redis.c
---- redis-3.0.7/src/redis.c	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/redis.c	2017-02-08 16:35:04.091667951 +0800
+diff -ur redis-3.0.5/src/redis.c redis-3.0.5-firstup/src/redis.c
+--- redis-3.0.5/src/redis.c	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/redis.c	2017-02-08 16:35:06.989681925 +0800
 @@ -32,6 +32,7 @@
  #include "slowlog.h"
  #include "bio.h"
@@ -119,7 +111,7 @@ diff -ur redis-3.0.7/src/redis.c redis-3.0.7-firstup/src/redis.c
      {"script",scriptCommand,-2,"rs",0,NULL,0,0,0,0,0},
      {"time",timeCommand,1,"rRF",0,NULL,0,0,0,0,0},
      {"bitop",bitopCommand,-4,"wm",0,NULL,2,-1,1,0,0},
-@@ -1562,6 +1564,7 @@
+@@ -1556,6 +1558,7 @@
      server.assert_line = 0;
      server.bug_report_start = 0;
      server.watchdog_period = 0;
@@ -127,17 +119,16 @@ diff -ur redis-3.0.7/src/redis.c redis-3.0.7-firstup/src/redis.c
  }
  
  /* This function will try to raise the max number of open files accordingly to
-@@ -1892,6 +1895,9 @@
-     replicationScriptCacheInit();
-     scriptingInit();
+@@ -1888,6 +1891,8 @@
      slowlogInit();
-+    durationlogInit();
-+    durationInit();
-+
      latencyMonitorInit();
      bioInit();
++    durationlogInit();
++    durationInit();
  }
-@@ -2092,6 +2098,7 @@
+ 
+ /* Populates the Redis Command Table starting from the hard coded list
+@@ -2086,6 +2091,7 @@
                                "fast-command" : "command";
          latencyAddSampleIfNeeded(latency_event,duration/1000);
          slowlogPushEntryIfNeeded(c->argv,c->argc,duration);
@@ -145,24 +136,22 @@ diff -ur redis-3.0.7/src/redis.c redis-3.0.7-firstup/src/redis.c
      }
      if (flags & REDIS_CALL_STATS) {
          c->cmd->microseconds += duration;
-diff -ur redis-3.0.7/src/redis.h redis-3.0.7-firstup/src/redis.h
---- redis-3.0.7/src/redis.h	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/redis.h	2017-02-08 16:35:04.215668541 +0800
-@@ -923,6 +923,11 @@
+diff -ur redis-3.0.5/src/redis.h redis-3.0.5-firstup/src/redis.h
+--- redis-3.0.5/src/redis.h	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/redis.h	2017-02-08 16:35:07.060682284 +0800
+@@ -923,6 +923,9 @@
      int assert_line;
      int bug_report_start; /* True if bug report header was already logged. */
      int watchdog_period;  /* Software watchdog period in ms. 0 = off */
-+
 +    list *durationlog;
 +    list *duration;
 +    long long duration_status;
-+    
  };
  
  typedef struct pubsubPattern {
-diff -ur redis-3.0.7/src/t_list.c redis-3.0.7-firstup/src/t_list.c
---- redis-3.0.7/src/t_list.c	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/t_list.c	2017-02-08 16:35:05.653675447 +0800
+diff -ur redis-3.0.5/src/t_list.c redis-3.0.5-firstup/src/t_list.c
+--- redis-3.0.5/src/t_list.c	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/t_list.c	2017-02-08 16:35:08.508689218 +0800
 @@ -28,6 +28,7 @@
   */
  
@@ -171,29 +160,26 @@ diff -ur redis-3.0.7/src/t_list.c redis-3.0.7-firstup/src/t_list.c
  
  /*-----------------------------------------------------------------------------
   * List API
-@@ -526,6 +527,10 @@
+@@ -526,6 +527,8 @@
      robj *o;
      long start, end, llen, rangelen;
  
-+    INITDURATIONARG;
-+
++   INITDURATIONARG;
 +    STARTDURATION("get list key");
-+
      if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != REDIS_OK) ||
          (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != REDIS_OK)) return;
  
-@@ -533,6 +538,10 @@
+@@ -533,6 +536,9 @@
           || checkType(c,o,REDIS_LIST)) return;
      llen = listTypeLength(o);
  
 +    LOGDURATION(REDIS_NOTICE);
-+
-+
 +    STARTDURATION("compute the index");
++
      /* convert negative indexes */
      if (start < 0) start = llen+start;
      if (end < 0) end = llen+end;
-@@ -542,13 +551,20 @@
+@@ -542,13 +548,17 @@
       * The range is empty when start > end or start >= length. */
      if (start > end || start >= llen) {
          addReply(c,shared.emptymultibulk);
@@ -204,21 +190,18 @@ diff -ur redis-3.0.7/src/t_list.c redis-3.0.7-firstup/src/t_list.c
      rangelen = (end-start)+1;
  
 +    LOGDURATION(REDIS_NOTICE);
-+
 +    STARTDURATION("Reply_list_nodes_length");
      /* Return the result in form of a multi-bulk reply */
      addReplyMultiBulkLen(c,rangelen);
-+
 +    LOGDURATION(REDIS_NOTICE);
-+
      if (o->encoding == REDIS_ENCODING_ZIPLIST) {
          unsigned char *p = ziplistIndex(o->ptr,start);
          unsigned char *vstr;
-@@ -556,11 +572,14 @@
+@@ -556,11 +566,14 @@
          long long vlong;
  
          while(rangelen--) {
-+            STARTDURATION("Reply_list_node_key");
++             STARTDURATION("Reply_list_node_key");
              ziplistGet(p,&vstr,&vlen,&vlong);
              if (vstr) {
                  addReplyBulkCBuffer(c,vstr,vlen);
@@ -229,7 +212,7 @@ diff -ur redis-3.0.7/src/t_list.c redis-3.0.7-firstup/src/t_list.c
              }
              p = ziplistNext(o->ptr,p);
          }
-@@ -573,8 +592,10 @@
+@@ -573,8 +586,10 @@
          ln = listIndex(o->ptr,start);
  
          while(rangelen--) {
@@ -240,9 +223,9 @@ diff -ur redis-3.0.7/src/t_list.c redis-3.0.7-firstup/src/t_list.c
          }
      } else {
          redisPanic("List encoding is not LINKEDLIST nor ZIPLIST!");
-diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
---- redis-3.0.7/src/t_string.c	2016-01-25 22:57:52.000000000 +0800
-+++ redis-3.0.7-firstup/src/t_string.c	2017-02-08 16:35:05.791676121 +0800
+diff -ur redis-3.0.5/src/t_string.c redis-3.0.5-firstup/src/t_string.c
+--- redis-3.0.5/src/t_string.c	2015-10-15 21:44:54.000000000 +0800
++++ redis-3.0.5-firstup/src/t_string.c	2017-02-08 16:35:08.622689803 +0800
 @@ -28,6 +28,7 @@
   */
  
@@ -251,17 +234,16 @@ diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
  #include <math.h> /* isnan(), isinf() */
  
  /*-----------------------------------------------------------------------------
-@@ -65,6 +66,9 @@
+@@ -65,6 +66,8 @@
  void setGenericCommand(redisClient *c, int flags, robj *key, robj *val, robj *expire, int unit, robj *ok_reply, robj *abort_reply) {
      long long milliseconds = 0; /* initialized to avoid any harmness warning */
  
 +    INITDURATIONARG;
 +    STARTDURATION("expire get");
-+
      if (expire) {
          if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != REDIS_OK)
              return;
-@@ -75,19 +79,35 @@
+@@ -75,19 +78,33 @@
          if (unit == UNIT_SECONDS) milliseconds *= 1000;
      }
  
@@ -277,27 +259,25 @@ diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
 +
 +    LOGDURATION(REDIS_NOTICE);
 +    STARTDURATION("setkeys");
++
      setKey(c->db,key,val);
      server.dirty++;
      if (expire) setExpire(c->db,key,mstime()+milliseconds);
 +
 +    LOGDURATION(REDIS_NOTICE);
-+
 +    STARTDURATION("notifysend");
 +
      notifyKeyspaceEvent(REDIS_NOTIFY_STRING,"set",key,c->db->id);
      if (expire) notifyKeyspaceEvent(REDIS_NOTIFY_GENERIC,
          "expire",key,c->db->id);
-+
 +    LOGDURATION(REDIS_NOTICE);
-+
 +    STARTDURATION("addReply_ok");
      addReply(c, ok_reply ? ok_reply : shared.ok);
 +    LOGDURATION(REDIS_NOTICE);
  }
  
  /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>] */
-@@ -144,15 +164,20 @@
+@@ -144,15 +161,18 @@
  
  int getGenericCommand(redisClient *c) {
      robj *o;
@@ -306,8 +286,6 @@ diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
      if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk)) == NULL)
          return REDIS_OK;
  
-+    STARTDURATION("checktype_addReplay");
-+
      if (o->type != REDIS_STRING) {
          addReply(c,shared.wrongtypeerr);
 +        LOGDURATION(REDIS_NOTICE);
@@ -318,22 +296,21 @@ diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
          return REDIS_OK;
      }
  }
-@@ -286,7 +311,8 @@
- 
+@@ -287,6 +307,9 @@
  void msetGenericCommand(redisClient *c, int nx) {
      int j, busykeys = 0;
--
+ 
 +    INITDURATIONARG;
 +    STARTDURATION("checkkeysexists");
++
      if ((c->argc % 2) == 0) {
          addReplyError(c,"wrong number of arguments for MSET");
          return;
-@@ -305,11 +331,17 @@
+@@ -305,11 +328,15 @@
          }
      }
  
 +    LOGDURATION(REDIS_NOTICE);
-+
 +    STARTDURATION("setkeys");
 +
      for (j = 1; j < c->argc; j += 2) {
@@ -341,7 +318,6 @@ diff -ur redis-3.0.7/src/t_string.c redis-3.0.7-firstup/src/t_string.c
          setKey(c->db,c->argv[j],c->argv[j+1]);
          notifyKeyspaceEvent(REDIS_NOTIFY_STRING,"set",c->argv[j],c->db->id);
      }
-+
 +    LOGDURATION(REDIS_NOTICE);
      server.dirty += (c->argc-1)/2;
      addReply(c, nx ? shared.cone : shared.ok);
